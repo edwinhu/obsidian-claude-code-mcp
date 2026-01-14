@@ -16,6 +16,38 @@ export const GENERAL_TOOL_DEFINITIONS: ToolDefinition[] = [
 		},
 	},
 	{
+		name: "get_selection",
+		description: "Get the currently selected text in the active editor. Returns the selected text along with the file path and selection range (start/end line and column).",
+		category: "editor",
+		inputSchema: {
+			type: "object",
+			properties: {},
+		},
+	},
+	{
+		name: "get_cursor_position",
+		description: "Get the current cursor position in the active editor. Returns the file path, line number (1-indexed), and column number.",
+		category: "editor",
+		inputSchema: {
+			type: "object",
+			properties: {},
+		},
+	},
+	{
+		name: "get_editor_context",
+		description: "Get comprehensive editor context including the active file path, cursor position, selected text (if any), and surrounding lines for context. Useful for understanding what the user is currently working on.",
+		category: "editor",
+		inputSchema: {
+			type: "object",
+			properties: {
+				context_lines: {
+					type: "integer",
+					description: "Number of lines to include before and after the cursor for context (default: 10)",
+				},
+			},
+		},
+	},
+	{
 		name: "get_workspace_files",
 		description: "List all files in the Obsidian vault",
 		category: "workspace",
@@ -179,6 +211,211 @@ export class GeneralTools {
 							],
 						},
 					});
+				},
+			},
+			{
+				name: "get_selection",
+				handler: async (args: any, reply: McpReplyFunction) => {
+					try {
+						const activeFile = this.app.workspace.getActiveFile();
+						const activeView = this.app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+
+						if (!activeFile || !activeView) {
+							return reply({
+								result: {
+									content: [
+										{
+											type: "text",
+											text: "No active editor or file",
+										},
+									],
+								},
+							});
+						}
+
+						const editor = activeView.editor;
+						const selection = editor.getSelection();
+
+						if (!selection) {
+							return reply({
+								result: {
+									content: [
+										{
+											type: "text",
+											text: JSON.stringify({
+												file: activeFile.path,
+												hasSelection: false,
+												message: "No text selected",
+											}, null, 2),
+										},
+									],
+								},
+							});
+						}
+
+						const from = editor.getCursor("from");
+						const to = editor.getCursor("to");
+
+						return reply({
+							result: {
+								content: [
+									{
+										type: "text",
+										text: JSON.stringify({
+											file: activeFile.path,
+											hasSelection: true,
+											selection: {
+												text: selection,
+												range: {
+													start: { line: from.line + 1, column: from.ch + 1 },
+													end: { line: to.line + 1, column: to.ch + 1 },
+												},
+											},
+										}, null, 2),
+									},
+								],
+							},
+						});
+					} catch (error) {
+						return reply({
+							error: {
+								code: -32603,
+								message: `Failed to get selection: ${error.message}`,
+							},
+						});
+					}
+				},
+			},
+			{
+				name: "get_cursor_position",
+				handler: async (args: any, reply: McpReplyFunction) => {
+					try {
+						const activeFile = this.app.workspace.getActiveFile();
+						const activeView = this.app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+
+						if (!activeFile || !activeView) {
+							return reply({
+								result: {
+									content: [
+										{
+											type: "text",
+											text: "No active editor or file",
+										},
+									],
+								},
+							});
+						}
+
+						const editor = activeView.editor;
+						const cursor = editor.getCursor();
+
+						return reply({
+							result: {
+								content: [
+									{
+										type: "text",
+										text: JSON.stringify({
+											file: activeFile.path,
+											cursor: {
+												line: cursor.line + 1,  // 1-indexed for user-friendliness
+												column: cursor.ch + 1,
+											},
+										}, null, 2),
+									},
+								],
+							},
+						});
+					} catch (error) {
+						return reply({
+							error: {
+								code: -32603,
+								message: `Failed to get cursor position: ${error.message}`,
+							},
+						});
+					}
+				},
+			},
+			{
+				name: "get_editor_context",
+				handler: async (args: any, reply: McpReplyFunction) => {
+					try {
+						const { context_lines = 10 } = args || {};
+						const activeFile = this.app.workspace.getActiveFile();
+						const activeView = this.app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+
+						if (!activeFile || !activeView) {
+							return reply({
+								result: {
+									content: [
+										{
+											type: "text",
+											text: "No active editor or file",
+										},
+									],
+								},
+							});
+						}
+
+						const editor = activeView.editor;
+						const cursor = editor.getCursor();
+						const selection = editor.getSelection();
+						const content = editor.getValue();
+						const lines = content.split("\n");
+						const totalLines = lines.length;
+
+						// Get context lines around cursor
+						const startLine = Math.max(0, cursor.line - context_lines);
+						const endLine = Math.min(totalLines, cursor.line + context_lines + 1);
+						const contextLines = lines.slice(startLine, endLine).map((line, idx) => {
+							const lineNum = startLine + idx + 1;
+							const isCursorLine = lineNum === cursor.line + 1;
+							return `${lineNum}${isCursorLine ? " >" : "  "}: ${line}`;
+						});
+
+						const result: any = {
+							file: activeFile.path,
+							totalLines,
+							cursor: {
+								line: cursor.line + 1,
+								column: cursor.ch + 1,
+							},
+							contextRange: {
+								start: startLine + 1,
+								end: endLine,
+							},
+							context: contextLines.join("\n"),
+						};
+
+						if (selection) {
+							const from = editor.getCursor("from");
+							const to = editor.getCursor("to");
+							result.selection = {
+								text: selection,
+								range: {
+									start: { line: from.line + 1, column: from.ch + 1 },
+									end: { line: to.line + 1, column: to.ch + 1 },
+								},
+							};
+						}
+
+						return reply({
+							result: {
+								content: [
+									{
+										type: "text",
+										text: JSON.stringify(result, null, 2),
+									},
+								],
+							},
+						});
+					} catch (error) {
+						return reply({
+							error: {
+								code: -32603,
+								message: `Failed to get editor context: ${error.message}`,
+							},
+						});
+					}
 				},
 			},
 			{
