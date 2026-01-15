@@ -3,6 +3,7 @@ import * as obsidian from "obsidian";
 import { McpReplyFunction } from "../mcp/types";
 import { ToolImplementation, ToolDefinition } from "../shared/tool-registry";
 import { normalizePath } from "../obsidian/utils";
+import { WorkspaceManager } from "../obsidian/workspace-manager";
 
 // General tool definitions (non-IDE specific)
 export const GENERAL_TOOL_DEFINITIONS: ToolDefinition[] = [
@@ -191,7 +192,7 @@ How to use:
 
 // General tool implementations
 export class GeneralTools {
-	constructor(private app: App) {}
+	constructor(private app: App, private workspaceManager?: WorkspaceManager) {}
 
 	createImplementations(): ToolImplementation[] {
 		return [
@@ -217,6 +218,44 @@ export class GeneralTools {
 				name: "get_selection",
 				handler: async (args: any, reply: McpReplyFunction) => {
 					try {
+						// Use WorkspaceManager.getCurrentSelection() which handles both live editor
+						// and cached selection (persists when switching to non-markdown leaves)
+						if (this.workspaceManager) {
+							const currentSelection = this.workspaceManager.getCurrentSelection();
+
+							if (currentSelection && currentSelection.filePath) {
+								const hasSelection = !!(currentSelection.text && currentSelection.text.length > 0);
+								return reply({
+									result: {
+										content: [
+											{
+												type: "text",
+												text: JSON.stringify({
+													file: currentSelection.filePath,
+													hasSelection,
+													selection: hasSelection ? {
+														text: currentSelection.text,
+														range: {
+															start: {
+																line: currentSelection.selection.start.line + 1,
+																column: currentSelection.selection.start.character + 1,
+															},
+															end: {
+																line: currentSelection.selection.end.line + 1,
+																column: currentSelection.selection.end.character + 1,
+															},
+														},
+													} : undefined,
+													message: hasSelection ? undefined : "No text selected",
+												}, null, 2),
+											},
+										],
+									},
+								});
+							}
+						}
+
+						// Fallback: try direct editor access (may not work if editor not focused)
 						const activeFile = this.app.workspace.getActiveFile();
 						const activeView = this.app.workspace.getActiveViewOfType(obsidian.MarkdownView);
 
@@ -226,7 +265,11 @@ export class GeneralTools {
 									content: [
 										{
 											type: "text",
-											text: "No active editor or file",
+											text: JSON.stringify({
+												file: activeFile?.path || null,
+												hasSelection: false,
+												message: "No active editor or file",
+											}, null, 2),
 										},
 									],
 								},

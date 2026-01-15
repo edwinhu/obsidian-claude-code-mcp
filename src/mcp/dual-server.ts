@@ -45,7 +45,7 @@ export class McpDualServer {
 
 	private registerTools(): void {
 		// Register general tools to BOTH registries (available for both IDE and MCP)
-		const generalTools = new GeneralTools(this.config.app);
+		const generalTools = new GeneralTools(this.config.app, this.config.workspaceManager);
 		const generalImplementations = generalTools.createImplementations();
 
 		for (let i = 0; i < GENERAL_TOOL_DEFINITIONS.length; i++) {

@@ -380,3 +380,14 @@
 	font-size: 12px;
 	padding: 6px 12px;
 }
+
+/* Keep selection highlight visible when editor loses focus */
+.cm-editor:not(.cm-focused) .cm-selectionBackground {
+	background-color: var(--text-selection) !important;
+	opacity: 0.5;
+}
+
+/* Ensure selection layer stays visible */
+.cm-editor:not(.cm-focused) .cm-selectionLayer {
+	display: block !important;
+}
