@@ -7,6 +7,7 @@
 import { Plugin, Notice, WorkspaceLeaf, addIcon } from "obsidian";
 import { McpDualServer } from "./src/mcp/dual-server";
 import { WorkspaceManager } from "./src/obsidian/workspace-manager";
+import { selectionHighlightExtension } from "./src/obsidian/selection-highlight";
 import {
 	ClaudeCodeSettings,
 	DEFAULT_SETTINGS,
@@ -41,6 +42,10 @@ export default class ClaudeMcpPlugin extends Plugin {
 
 		// Add settings tab
 		this.addSettingTab(new ClaudeCodeSettingTab(this.app, this));
+
+		// Register editor extension for persistent selection highlighting
+		// This keeps the visual selection visible when clicking outside the editor
+		this.registerEditorExtension(selectionHighlightExtension);
 
 		// Initialize workspace manager first
 		this.workspaceManager = new WorkspaceManager(this.app, this, {
